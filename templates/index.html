@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fake News Detection</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Tailwind & other libs -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.js"></script>
+
+  <!-- Instead of /socket.io/socket.io.js, load the Socket.IO client from a CDN (v4.6.1 or latest) -->
+  <!-- in your index.html -->
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.6.1/dist/socket.io.min.js"></script>
+
+
+  <style>
+    .transcription-container {
+      max-height: clamp(200px, 50vh, 400px);
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    .news-container {
+      max-height: clamp(300px, calc(100vh - 4rem), 600px);
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    .confidence-chart {
+      height: clamp(200px, 40vh, 300px);
+      transition: all 0.3s ease;
+    }
+    .confidence-chart:hover {
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    }
+    @media (max-width: 640px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 768px) {
+      .news-container {
+        max-height: 300px;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="container mx-auto px-4 py-6 sm:py-8">
+    <h1 class="text-2xl sm:text-3xl font-bold text-center mb-6 sm:mb-8">🎙️Fake News Detection</h1>
+
+    <div class="flex flex-col lg:flex-row gap-4 sm:gap-6">
+      <!-- Left Column - Analysis Tool -->
+      <div class="w-full lg:w-2/3 space-y-4 sm:space-y-6">
+        <!-- Input Form -->
+        <div class="bg-white rounded-lg sm:rounded-xl shadow p-4 sm:p-6">
+          <form id="transcriptionForm" class="space-y-4">
+            <div class="form-grid grid gap-4">
+              <div>
+                <label for="videoType" class="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                  Content Type
+                </label>
+                <select id="videoType" class="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="recorded">Recorded Video</option>
+                  <option value="live">Live Stream</option>
+                  <option value="text">Text Analysis</option>
+                  <option value="article">Article URL</option>
+                </select>
+              </div>
+              <div>
+                <label for="language" class="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                  Language
+                </label>
+                <select id="language" class="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="en">English</option>
+                  <option value="es">Spanish</option>
+                  <option value="fr">French</option>
+                  <option value="de">German</option>
+                  <option value="it">Italian</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="urlContainer" class="space-y-1 sm:space-y-2">
+              <label for="videoUrl" class="block text-sm font-medium text-gray-700">
+                Video URL
+              </label>
+              <input
+                type="text"
+                id="videoUrl"
+                placeholder="Enter video URL"
+                class="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div id="textContainer" class="hidden space-y-1 sm:space-y-2">
+              <label for="textInput" class="block text-sm font-medium text-gray-700">
+                Text for Analysis
+              </label>
+              <textarea
+                id="textInput"
+                placeholder="Enter or paste text for analysis..."
+                rows="4"
+                class="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              ></textarea>
+            </div>
+
+            <div id="articleContainer" class="hidden space-y-1 sm:space-y-2">
+              <label for="articleUrl" class="block text-sm font-medium text-gray-700">
+                Article URL
+              </label>
+              <input
+                type="url"
+                id="articleUrl"
+                placeholder="Enter article URL for analysis"
+                class="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p class="text-xs text-gray-500">Enter the URL of any news article or blog post for analysis</p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+              <button
+                type="submit"
+                id="startTranscription"
+                class="w-full bg-blue-600 text-white py-2 sm:py-3 px-4 rounded-md text-sm sm:text-base hover:bg-blue-700 transition duration-300 flex items-center justify-center gap-2"
+              >
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                  ></path>
+                </svg>
+                <span id="startButtonText">Start Analysis</span>
+              </button>
+
+              <button
+                type="button"
+                id="stopTranscription"
+                class="w-full bg-red-600 text-white py-2 sm:py-3 px-4 rounded-md text-sm sm:text-base hover:bg-red-700 transition duration-300 hidden flex items-center justify-center gap-2"
+              >
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path>
+                </svg>
+                Stop
+              </button>
+            </div>
+          </form>
+
+          <div id="loadingMessage" class="hidden mt-4 text-center text-yellow-600 flex items-center justify-center gap-2">
+            <svg class="animate-spin h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            <span id="loadingText" class="text-sm sm:text-base">Processing...</span>
+          </div>
+        </div>
+
+        <!-- Analysis Results -->
+        <div class="bg-white rounded-lg sm:rounded-xl shadow p-4 sm:p-6">
+          <h2 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Analysis Result:</h2>
+          <div id="transcriptionResult" class="transcription-container bg-gray-50 rounded-md p-3 sm:p-4 mb-4 sm:mb-6 text-sm sm:text-base"></div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div>
+              <h3 class="text-base sm:text-lg font-semibold mb-2">Fact Check Result:</h3>
+              <div id="factCheckResult" class="bg-gray-50 rounded-md p-3 sm:p-4 text-sm sm:text-base"></div>
+            </div>
+            <div>
+              <h3 class="text-base sm:text-lg font-semibold mb-2">Confidence Analysis:</h3>
+              <div id="confidenceChart" class="confidence-chart bg-gray-50 rounded-md"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column - Trending News -->
+      <div class="w-full lg:w-1/3">
+        <div class="bg-white rounded-lg sm:rounded-xl shadow p-4 sm:p-6 lg:sticky lg:top-4">
+          <div class="flex justify-between items-center mb-3 sm:mb-4">
+            <h2 class="text-lg sm:text-xl font-bold">Trending News</h2>
+            <button
+              id="refreshNews"
+              class="bg-blue-500 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-sm sm:text-base hover:bg-blue-600 transition duration-300 flex items-center gap-2"
+            >
+              <svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+              Refresh
+            </button>
+          </div>
+          <div id="trendingNews" class="space-y-3 sm:space-y-4 news-container"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Your main JS code -->
+  <script src="/static/script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>
