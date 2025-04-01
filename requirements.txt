@@ -1,0 +1,11 @@
+Flask
+flask_socketio
+python-dotenv
+joblib
+numpy
+requests
+feedparser
+beautifulsoup4
+assemblyai
+scikit-learn
+pandas
